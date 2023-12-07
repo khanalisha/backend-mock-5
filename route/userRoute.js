@@ -1,82 +1,54 @@
-const express = require("express");
 const { userModel } = require("../model/userSchema");
+require("dotenv").config();
+const bcrypt = require("bcrypt");
+const express = require("express");
+const jwt = require("jsonwebtoken");
 
-const AllUserRoutes = express.Router();
+const UserRoutes = express.Router();
 
-AllUserRoutes.post("/contacts", async (req, res) => {
-  const { name, email, phone, lable, book_slots } = req.body;
-
+UserRoutes.post("/api/register", async (req, res) => {
+  const { username, Avatar, email, password } = req.body;
   try {
-    const user = new userModel({ name, email, phone, lable, book_slots });
-    await user.save();
-    res.status(200).json({ msg: "user is added", user });
-  } catch (error) {
-    res.status(400).json({ error: error });
-  }
-});
-
-AllUserRoutes.patch("/update/:id", async (req, res) => {
-  const id = req.params.id;
-  console.log(id);
-  const UpdatePost = req.body;
-  const name = req.body.name;
-  try {
-    const UpdateUser = await userModel.findByIdAndUpdate(
-      { _id: id, name },
-      UpdatePost,
-      { new: true }
-    );
-
-    if (!UpdateUser) {
-      res.status(400).json({ msg: "User not found" });
+    const existinguser = await userModel.findOne({ email });
+    if (existinguser) {
+      res.status(400).json({ msg: "use another mail this is already there!" });
+    } else {
+      bcrypt.hash(password, 5, async (err, hash) => {
+        const user = new userModel({
+          ...req.body,
+          password: hash,
+        });
+        await user.save();
+        res.send({ msg: "you are now registerd now!", user });
+      });
     }
-    res.status(200).json({ mag: "Updated user", UpdateUser });
   } catch (error) {
-    res.status(401).json({ error: error });
+    res.send({ error: error });
   }
 });
 
-AllUserRoutes.delete("/delete/:id", async (req, res) => {
-  const id = req.params.id;
-  console.log(id);
-  const name = req.body.name;
+UserRoutes.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
   try {
-    const deleteUser = await userModel.findByIdAndDelete({ _id: id, name });
-
-    if (!deleteUser) {
-      res.status(400).json({ msg: "User not delete" });
-    }
-    res.status(200).json({ mag: "deleted user", deleteUser });
-  } catch (error) {
-    res.status(401).json({ error: error });
-  }
-});
-AllUserRoutes.get("/allUser", async (req, res) => {
-  const { name, email, phone, lable, book_slots } = req.body;
-  try {
-    const user = await userModel.find();
-    res.status(200).json({ msg: "get all users", user: user });
-  } catch (error) {
-    res.status(400).json({ error: error });
-  }
-});
-
-AllUserRoutes.get("/search", async (req, res) => {
-  const { firstName } = req.query;
-
-  try {
-    const users = await userModel.find({
-      name: { $regex: new RegExp(firstName, "i") },
+    const existinguser = await userModel.findOne({ email });
+    bcrypt.compare(password, existinguser.password, (err, result) => {
+      if (result) {
+        const token = jwt.sign(
+          { userId: existinguser._id },
+          process.env.secretkey
+        );
+        res
+          .status(200)
+          .json({ mag: "Login Sucess!", token: token, existinguser });
+      } else {
+        res.status(401).json({ err: err.message });
+      }
     });
-    if (users.length === 0) {
-      res.status(404).json({ mag: "No user match" });
-    }
-    res.status(200).json({ mag: "User Found", users });
   } catch (error) {
-    res.status(400).json({ error: error });
+    res.status(401).json({ error: error });
   }
 });
 
 module.exports = {
-  AllUserRoutes,
+  UserRoutes,
 };
